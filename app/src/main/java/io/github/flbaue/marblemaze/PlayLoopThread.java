@@ -1,17 +1,18 @@
 package io.github.flbaue.marblemaze;
 
+import android.annotation.SuppressLint;
 import android.graphics.Canvas;
-import android.graphics.Color;
 
 /**
  * Created by florian on 11.07.15.
  */
-public class GameLoopThread extends Thread {
+public class PlayLoopThread extends Thread {
+
     static final long FPS = 30;
     private PlayView view;
     private boolean running = false;
 
-    public GameLoopThread(PlayView view) {
+    public PlayLoopThread(PlayView view) {
         this.view = view;
     }
 
@@ -19,17 +20,22 @@ public class GameLoopThread extends Thread {
         running = run;
     }
 
+    @SuppressLint("WrongCall")
     @Override
     public void run() {
+
         long ticksPS = 1000 / FPS;
         long startTime;
         long sleepTime;
+
         while (running) {
+
             Canvas c = null;
             startTime = System.currentTimeMillis();
+
             try {
                 c = view.getHolder().lockCanvas();
-                if(!view.getHolder().getSurface().isValid())
+                if (!view.getHolder().getSurface().isValid())
                     continue;
                 synchronized (view.getHolder()) {
                     view.onDraw(c);
@@ -39,13 +45,16 @@ public class GameLoopThread extends Thread {
                     view.getHolder().unlockCanvasAndPost(c);
                 }
             }
-            sleepTime = ticksPS-(System.currentTimeMillis() - startTime);
+
+            sleepTime = ticksPS - (System.currentTimeMillis() - startTime);
+
             try {
                 if (sleepTime > 0)
                     sleep(sleepTime);
                 else
                     sleep(10);
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
         }
     }
 }

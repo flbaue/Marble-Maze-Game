@@ -8,7 +8,6 @@ import android.graphics.Paint;
 import android.graphics.Point;
 import android.hardware.SensorEvent;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -20,7 +19,7 @@ import android.view.SurfaceView;
 public class PlayView extends SurfaceView {
 
     private SurfaceHolder holder;
-    private GameLoopThread gameLoopThread;
+    private PlayLoopThread playLoopThread;
 
     private final Paint mLinesPaint = new Paint();
     private final Paint mPlayerPaint = new Paint();
@@ -35,50 +34,55 @@ public class PlayView extends SurfaceView {
     private Line[] mLines = new Line[4];
     private Bitmap mLinesBitmap;
     private Point mCenter;
+    private Point mGoal;
     private Player mPlayer;
 
-    private float mMovement_x_angle;
-    private float mMovement_y_angle;
-    private float mMovement_z_angle;
-    private Paint mMovementpaint;
+    private float mDeviceXAngle;
+    private float mDeviceYAngle;
+    private float mDeviceZAngle;
+    private Paint mMovementPaint;
 
     private long mUpdateTime;
 
     public PlayView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        gameLoopThread = new GameLoopThread(this);
+
+        playLoopThread = new PlayLoopThread(this);
         holder = getHolder();
         holder.addCallback(new SurfaceHolder.Callback() {
 
             @Override
             public void surfaceDestroyed(SurfaceHolder holder) {
+
                 boolean retry = true;
-                gameLoopThread.setRunning(false);
+                playLoopThread.setRunning(false);
+
                 while (retry) {
                     try {
-                        gameLoopThread.join();
+                        playLoopThread.join();
                         retry = false;
                     } catch (InterruptedException e) {
+
                     }
                 }
             }
 
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
-                gameLoopThread.setRunning(true);
-                gameLoopThread.start();
+                playLoopThread.setRunning(true);
+                playLoopThread.start();
             }
 
             @Override
-            public void surfaceChanged(SurfaceHolder holder, int format,
-                                       int width, int height) {
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+
             }
         });
 
-        init();
+        setup();
     }
 
-    private void init() {
+    private void setup() {
         mUpdateTime = System.currentTimeMillis();
 
         mLinesPaint.setColor(Color.DKGRAY);
@@ -90,15 +94,19 @@ public class PlayView extends SurfaceView {
         mPlayerPaint.setStyle(Paint.Style.FILL);
         mPlayerPaint.setAntiAlias(true);
 
-        mMovementpaint = new Paint();
-        mMovementpaint.setColor(Color.BLACK);
-        mMovementpaint.setAntiAlias(true);
-        mMovementpaint.setTextSize(dpToPx(10));
+        mMovementPaint = new Paint();
+        mMovementPaint.setColor(Color.BLACK);
+        mMovementPaint.setAntiAlias(true);
+        mMovementPaint.setTextSize(dpToPx(10));
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
+        if (canvas == null) {
+            return;
+        }
 
         if (mFirst) {
             mWidth = getWidth();
@@ -107,24 +115,70 @@ public class PlayView extends SurfaceView {
         }
 
         canvas.drawColor(Color.WHITE);
-
         drawLines(canvas);
         drawPlayer(canvas);
-        drawMovement(canvas);
+        updatePlayer();
+        if (playerCollision()) {
+            canvas.drawColor(Color.parseColor("#77FF0000"));
+        } else if (goalReached()) {
+            canvas.drawColor(Color.parseColor("#7700FFAA"));
+        }
+
+
+        //drawDebugInfo(canvas);
 
         if (mFirst) {
             mFirst = false;
         }
     }
 
-    private void drawMovement(Canvas canvas) {
-        String movX = "X: " + mMovement_x_angle;
-        String movY = "Y: " + mMovement_y_angle;
-        String movZ = "Z: " + mMovement_z_angle;
+    private boolean goalReached() {
+        float a = (float) Math.pow(mPlayer.x - mGoal.x, 2);
+        float b = (float) Math.pow(mPlayer.y - mGoal.y, 2);
+        float c2 = a + b;
 
-        canvas.drawText(movX, 0, dpToPx(12), mMovementpaint);
-        canvas.drawText(movY, 0, dpToPx(24), mMovementpaint);
-        canvas.drawText(movZ, 0, dpToPx(32), mMovementpaint);
+        if (c2 <= Math.pow(mPlayer.r, 2)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private boolean playerCollision() {
+        for (Line line : mLines) {
+            if (playerIntersection(line)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean playerIntersection(Line l) {
+        float x0 = mPlayer.x;
+        float y0 = mPlayer.y;
+        float x1 = l.x1;
+        float y1 = l.y1;
+        float x2 = l.x2;
+        float y2 = l.y2;
+        float n = Math.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1));
+        double d = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+        double dist = n / d;
+        if (dist > mPlayer.r) return false;
+        double d1 = Math.sqrt((x0 - x1) * (x0 - x1) + (y0 - y1) * (y0 - y1));
+        if ((d1 - mPlayer.r) > d) return false;
+        double d2 = Math.sqrt((x0 - x2) * (x0 - x2) + (y0 - y2) * (y0 - y2));
+        if ((d2 - mPlayer.r) > d) return false;
+        return true;
+    }
+
+    private void drawDebugInfo(Canvas canvas) {
+        String movX = "X: " + mDeviceXAngle;
+        String movY = "Y: " + mDeviceYAngle;
+        String movZ = "Z: " + mDeviceZAngle;
+
+        canvas.drawText(movX, 0, dpToPx(12), mMovementPaint);
+        canvas.drawText(movY, 0, dpToPx(24), mMovementPaint);
+        canvas.drawText(movZ, 0, dpToPx(32), mMovementPaint);
     }
 
     private void drawPlayer(Canvas canvas) {
@@ -132,14 +186,14 @@ public class PlayView extends SurfaceView {
             float r = mTunnelHeight * 0.4f;
             mPlayer = new Player(r, mCenter.x - (mTunnelLength / 2) + mTunnelHeight / 2, mCenter.y, 0, 0);
         }
-        updatePlayer();
+
         canvas.drawCircle(mPlayer.x, mPlayer.y, mPlayer.r, mPlayerPaint);
     }
 
     private void updatePlayer() {
 
-        int xSpeedF = Math.round(-mMovement_y_angle);
-        int ySpeedF = Math.round(mMovement_z_angle);
+        int xSpeedF = Math.round(-mDeviceYAngle);
+        int ySpeedF = Math.round(mDeviceZAngle);
 
         mPlayer.sX += 0.1f * xSpeedF;
         mPlayer.sY += 0.1f * ySpeedF;
@@ -173,6 +227,9 @@ public class PlayView extends SurfaceView {
             for (Line line : mLines) {
                 linesCanvas.drawLine(line.x1, line.y1, line.x2, line.y2, mLinesPaint);
             }
+
+            mGoal = new Point(Math.round(mCenter.x + tLengthOffset - mTunnelHeight * 0.4f), mCenter.y);
+            linesCanvas.drawCircle(mGoal.x, mGoal.y, dpToPx(4), mPlayerPaint);
         }
 
         canvas.drawBitmap(mLinesBitmap, 0, 0, null);
@@ -184,9 +241,9 @@ public class PlayView extends SurfaceView {
 
     public void updateMovement(SensorEvent event) {
 
-        mMovement_x_angle = event.values[0];
-        mMovement_y_angle = event.values[1];
-        mMovement_z_angle = event.values[2];
+        mDeviceXAngle = event.values[0];
+        mDeviceYAngle = event.values[1];
+        mDeviceZAngle = event.values[2];
     }
 
     private class Player {
