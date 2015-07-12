@@ -1,4 +1,4 @@
-# Marble-Maze-Game
+# Marble-Maze-Game (Prototype)
 
 The game is played by moving the phone.
 
